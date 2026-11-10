@@ -1,0 +1,35 @@
+{{define "head"}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LinkedIn Post Manager</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+{{end}}
+
+{{define "nav"}}
+<header class="navbar">
+  <div class="navbar-inner">
+    <a href="/" class="brand">
+      <span class="brand-badge">in</span>
+      <span>Post Manager</span>
+    </a>
+    <nav class="nav-links">
+      <a href="/" class="nav-link {{if eq . "board"}}active{{end}}">Weekly Board</a>
+      <a href="/subjects" class="nav-link {{if eq . "subjects"}}active{{end}}">Subjects &amp; Priority</a>
+      <a href="/settings" class="nav-link {{if eq . "settings"}}active{{end}}">Prompts &amp; Settings</a>
+    </nav>
+  </div>
+</header>
+{{end}}
+
+{{define "foot"}}
+<div id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
+{{end}}

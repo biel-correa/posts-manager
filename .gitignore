@@ -1,0 +1,16 @@
+# Environment variables
+.env
+
+# Binaries & build artifacts
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+linkedin-post-manager
+
+# Operating System files
+.DS_Store
+Thumbs.db

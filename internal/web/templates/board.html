@@ -1,0 +1,466 @@
+{{define "page_board"}}
+{{template "head"}}
+{{template "nav" "board"}}
+<main class="container">
+  {{if not .GeminiConfigured}}
+  <div class="banner banner-warning">
+    <div>
+      <strong>GEMINI_API_KEY is not set yet.</strong> Add your key to <code>.env</code> and run <code>docker compose up -d</code> to enable automatic Sunday &amp; manual post generation.
+    </div>
+    <a href="/settings" class="btn btn-sm">Model Guide</a>
+  </div>
+  {{end}}
+
+  {{if eq .ActiveSubjectCount 0}}
+  <div class="banner banner-info">
+    <div>
+      <strong>Step 1 — Setup your Subjects:</strong> Add the topics you want to post about (e.g. <code>.NET = 10</code>, <code>Angular = 10</code>, <code>Golang = 4</code>) so the weekly generator knows what to research and write.
+    </div>
+    <a href="/subjects" class="btn btn-primary btn-sm">Setup Subjects</a>
+  </div>
+  {{end}}
+
+  {{template "ideas_panel" .}}
+
+  <div id="board-root">
+    {{template "board_inner" .}}
+  </div>
+</main>
+{{template "foot"}}
+{{end}}
+
+{{define "ideas_panel"}}
+<section id="ideas-panel" class="panel">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.55rem; flex-wrap:wrap; gap:0.5rem;">
+    <div>
+      <strong style="font-size:0.92rem;">Quick Idea Inbox</strong>
+      <span style="font-size:0.8rem; color:var(--text-muted); margin-left:0.4rem;">
+        Drop a one-off bug story, topic spark, or blog URL — queued ideas claim priority slots before weighted subjects.
+      </span>
+    </div>
+    {{if .Ideas}}
+    <span class="pill pill-blue">{{len .Ideas}} queued</span>
+    {{end}}
+  </div>
+  <form class="idea-form" hx-post="/ideas" hx-target="#ideas-panel" hx-swap="outerHTML">
+    <div style="flex: 3 1 280px;">
+      <input type="text" name="content" placeholder="e.g. Today we cut .NET minimal API allocations by 40% using Span<T> — or paste a blog URL..." required>
+    </div>
+    <div style="flex: 1 1 160px;">
+      <input type="text" name="subject_name" placeholder="Area tag (optional, e.g. .NET)">
+    </div>
+    <button type="submit" class="btn">Queue Spark</button>
+  </form>
+
+  {{if .Ideas}}
+  <div class="idea-list">
+    {{range .Ideas}}
+    <div class="idea-chip">
+      {{if .SubjectName}}<span class="pill pill-blue">{{.SubjectName}}</span>{{end}}
+      <span>{{.Content}}</span>
+      <button type="button" class="btn btn-danger-ghost btn-sm" style="padding:0.1rem 0.35rem;"
+              hx-delete="/ideas/{{hex .ID}}" hx-target="#ideas-panel" hx-swap="outerHTML" title="Remove queued idea">✕</button>
+    </div>
+    {{end}}
+  </div>
+  {{end}}
+</section>
+{{end}}
+
+{{define "board_inner"}}
+<div {{if .IsGenerating}}hx-get="/partials/board?week={{.SelectedWeek}}" hx-trigger="every 4s" hx-swap="outerHTML"{{else if .HasPendingImages}}hx-get="/partials/board?week={{.SelectedWeek}}" hx-trigger="every 10s" hx-swap="outerHTML"{{end}}>
+  <div class="toolbar">
+    <div class="toolbar-left">
+      <h1 class="toolbar-title">Week of {{.SelectedWeekLabel}}</h1>
+      <form method="GET" action="/" style="display:inline-flex; align-items:center;">
+        <select name="week" onchange="this.form.submit()" style="width:auto; font-weight:600;">
+          {{range .Weeks}}
+          <option value="{{.Key}}" {{if eq .Key $.SelectedWeek}}selected{{end}}>
+            {{.Label}}{{if .IsCurrent}} (Current){{end}}
+          </option>
+          {{end}}
+        </select>
+      </form>
+      <span class="pill {{if ge .ScheduledCount .TargetPerWeek}}pill-green{{else}}pill-gray{{end}}">
+        {{.ScheduledCount}} / {{len .Posts}} Scheduled on LinkedIn
+      </span>
+      {{if .IsGenerating}}
+      <span class="pill pill-blue">
+        <span class="spinner" style="width:12px;height:12px;border-width:2px;"></span>
+        {{if searchGroundingEnabled}}Generating with Web Search &amp; Gemini...{{else}}Generating with Gemini...{{end}}
+      </span>
+      {{end}}
+    </div>
+
+    <div class="toolbar-actions">
+      {{if .IsCurrentWeek}}
+      <button class="btn btn-primary"
+              hx-post="/weeks/generate-missing?week={{.SelectedWeek}}"
+              hx-target="#board-root"
+              hx-swap="innerHTML">
+        Generate Missing ({{.TargetPerWeek}}/wk)
+      </button>
+      {{end}}
+      <button class="btn"
+              hx-post="/weeks/generate-one?week={{.SelectedWeek}}"
+              hx-target="#board-root"
+              hx-swap="innerHTML">
+        + Generate 1 Post
+      </button>
+    </div>
+  </div>
+
+  {{if and .GeminiConfigured (not imageGenEnabled)}}
+  <div class="banner banner-info">
+    <div>
+      <strong>Text-Only Mode (Image Generation Disabled):</strong>
+      {{if imageAutoDisabled}}
+      Your Gemini API key is on the Free Tier (0 image requests/day), so image generation was automatically disabled.
+      {{else}}
+      Image generation is turned off (<code>GEMINI_IMAGE_GENERATION=false</code>).
+      {{end}}
+      Posts not having an image is expected and <strong>not an error</strong> — they are ready to copy and publish as text-only posts.
+    </div>
+    <a href="/settings" class="btn btn-sm">Model Settings</a>
+  </div>
+  {{end}}
+
+  {{if .FlashError}}
+  <div class="banner banner-danger">{{.FlashError}}</div>
+  {{end}}
+
+  {{if .Posts}}
+  <div class="posts-grid">
+    {{range .Posts}}
+      {{template "post_card" .}}
+    {{end}}
+  </div>
+  {{else}}
+  <div class="empty-state">
+    <h3 style="margin:0 0 0.4rem; color:var(--text);">No posts generated for {{.SelectedWeekLabel}} yet</h3>
+    <p style="margin:0 0 1rem; font-size:0.9rem;">
+      Posts are automatically generated every Sunday (and compensated automatically for the current week if the app was offline).
+    </p>
+    {{if gt .ActiveSubjectCount 0}}
+    <button class="btn btn-primary"
+            hx-post="/weeks/generate-missing?week={{.SelectedWeek}}"
+            hx-target="#board-root"
+            hx-swap="innerHTML">
+      Generate {{.TargetPerWeek}} Posts Now
+    </button>
+    {{else}}
+    <a href="/subjects" class="btn btn-primary">Add Your First Subject</a>
+    {{end}}
+  </div>
+  {{end}}
+</div>
+{{end}}
+
+{{define "post_card"}}
+<article id="post-{{hex .ID}}" class="post-card {{if eq .Status "scheduled"}}is-scheduled{{end}}">
+  <div class="card-loading-overlay">
+    <div class="spinner"></div>
+    <span>{{if searchGroundingEnabled}}Searching web &amp; crafting with Gemini...{{else}}Crafting post with Gemini...{{end}}</span>
+  </div>
+
+  <div class="post-card-header">
+    <div style="display:flex; align-items:center; gap:0.4rem; flex-wrap:wrap;">
+      <span class="pill pill-gray">Slot {{.SlotIndex}}{{if .SuggestedDay}} · {{.SuggestedDay}}{{end}}</span>
+      <span class="pill pill-blue">{{.SubjectName}}</span>
+    </div>
+
+    <div style="display:flex; align-items:center; gap:0.35rem;">
+      <button type="button"
+              class="btn btn-sm {{if .IsGolden}}pill-gold{{else}}btn-ghost{{end}}"
+              hx-post="/posts/{{hex .ID}}/toggle-golden"
+              hx-target="#post-{{hex .ID}}"
+              hx-swap="outerHTML"
+              title="Star as a Golden Post voice example for future generations">
+        {{if .IsGolden}}★ Voice Ref{{else}}☆ Voice{{end}}
+      </button>
+
+      {{if eq .Status "scheduled"}}
+      <button type="button" class="btn btn-success btn-sm"
+              hx-post="/posts/{{hex .ID}}/status?status=draft"
+              hx-target="#post-{{hex .ID}}"
+              hx-swap="outerHTML"
+              title="Click to revert to Draft">
+        ✓ Scheduled
+      </button>
+      {{else if eq .Status "generating"}}
+      <span class="pill pill-amber">Generating…</span>
+      {{else if eq .Status "failed"}}
+      <span class="pill pill-red">Failed</span>
+      {{else}}
+      <button type="button" class="btn btn-sm"
+              hx-post="/posts/{{hex .ID}}/status?status=scheduled"
+              hx-target="#post-{{hex .ID}}"
+              hx-swap="outerHTML"
+              title="Mark as Scheduled after pasting into LinkedIn">
+        Mark Scheduled
+      </button>
+      {{end}}
+    </div>
+  </div>
+
+  {{if .SourceTitle}}
+  <div class="post-source-bar">
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:0.5rem;">
+      <span class="post-source-title" title="{{.SourceTitle}}">
+        🌐 {{if .SourceURL}}<a href="{{.SourceURL}}" target="_blank" rel="noopener noreferrer">{{.SourceTitle}} ↗</a>{{else}}{{.SourceTitle}}{{end}}
+      </span>
+      {{if .SourceURL}}
+      <button type="button" class="btn btn-ghost btn-sm" style="padding:0.15rem 0.45rem; flex-shrink:0;"
+              onclick="copyRawText(this, {{printf "%q" .SourceURL}}, 'Source blog URL')">
+        Copy URL
+      </button>
+      {{end}}
+    </div>
+    {{if .SourceSummary}}
+    <div style="font-size:0.75rem; color:var(--text-faint); margin-top:0.2rem;">{{.SourceSummary}}</div>
+    {{end}}
+  </div>
+  {{end}}
+
+  {{if .ErrorMessage}}
+  <div class="banner {{if contains .ErrorMessage "high demand"}}banner-warning{{else}}banner-danger{{end}}" style="margin:0.65rem; padding:0.6rem 0.75rem; font-size:0.8rem;">
+    <span>{{.ErrorMessage}}</span>
+  </div>
+  {{end}}
+
+  <div class="post-image-wrap {{if and (not .HasImage) (ne .Status "generating") (not imageGenEnabled)}}post-image-wrap-disabled{{end}}">
+    {{if .HasImage}}
+    <img src="/posts/{{hex .ID}}/image?v={{.ImageVersion}}" alt="{{.AltText}}" loading="lazy">
+    {{else if eq .Status "generating"}}
+    <div class="post-image-empty">
+      <div class="spinner" style="margin:0 auto 0.5rem;"></div>
+      {{if imageGenEnabled}}
+      Designing visual metaphor &amp; rendering image…
+      {{else}}
+      Drafting LinkedIn post with Gemini…
+      {{end}}
+    </div>
+    {{else if not imageGenEnabled}}
+    <div class="post-image-disabled">
+      <span class="pill pill-blue">Text-Only Post · Image Generation Disabled</span>
+      <p class="post-image-disabled-text">
+        Not having an image is not an error — image generation is disabled{{if imageAutoDisabled}} (Free Tier API key){{else}} (<code>GEMINI_IMAGE_GENERATION=false</code>){{end}}, so this post is ready to publish as text-only.
+      </p>
+    </div>
+    {{else}}
+    <div class="post-image-empty">No image generated yet</div>
+    {{end}}
+  </div>
+
+  {{if .HasImage}}
+  <div class="post-image-actions">
+    <button type="button" class="btn btn-primary btn-sm"
+            onclick="copyImageToClipboard(this, '/posts/{{hex .ID}}/image?v={{.ImageVersion}}')">
+      Copy Image (Cmd+V)
+    </button>
+    <a href="/posts/{{hex .ID}}/image?v={{.ImageVersion}}&amp;download=1" class="btn btn-sm">
+      Download PNG
+    </a>
+    {{if .AltText}}
+    <button type="button" class="btn btn-ghost btn-sm"
+            onclick="copyTextFromElement(this, 'alt-{{hex .ID}}', 'LinkedIn Alt Text')">
+      Copy Alt Text
+    </button>
+    <textarea id="alt-{{hex .ID}}" hidden>{{.AltText}}</textarea>
+    {{end}}
+  </div>
+  {{end}}
+
+  <div class="post-body">
+    {{if .Content}}
+    <div class="post-meta-bar">
+      <span>
+        <strong>{{.WordCount}} words</strong> · {{.CharCount}} chars
+        {{if sweetSpot .WordCount}}
+        <span style="color:var(--success); font-weight:600;">(Optimal 120–220w)</span>
+        {{end}}
+      </span>
+      {{if .ImageStyle}}<span>{{.ImageStyle}} ({{.ImageAspectRatio}})</span>{{end}}
+    </div>
+
+    {{$before := ""}}{{$after := ""}}{{$hasFold := false}}
+    {{with .}}
+      <div class="post-copy-box">
+        {{template "fold_render" .}}
+      </div>
+    {{end}}
+
+    <textarea id="raw-post-{{hex .ID}}" hidden>{{.Content}}</textarea>
+
+    <div class="post-primary-actions">
+      <button type="button" class="btn btn-primary" style="flex:1;"
+              onclick="copyTextFromElement(this, 'raw-post-{{hex .ID}}', 'LinkedIn Post')">
+        Copy Post Text
+      </button>
+      <button type="button" class="btn"
+              hx-get="/posts/{{hex .ID}}/edit"
+              hx-target="#post-{{hex .ID}}"
+              hx-swap="outerHTML">
+        Edit
+      </button>
+      <button type="button" class="btn btn-danger-ghost btn-sm"
+              hx-delete="/posts/{{hex .ID}}"
+              hx-confirm="{{if .HasImage}}Delete this post and its image?{{else}}Delete this post?{{end}}"
+              hx-target="#post-{{hex .ID}}"
+              hx-swap="outerHTML">
+        Delete
+      </button>
+    </div>
+    {{else if ne .Status "generating"}}
+    <div class="post-primary-actions">
+      <button type="button" class="btn btn-primary"
+              hx-post="/posts/{{hex .ID}}/regenerate-text"
+              hx-target="#post-{{hex .ID}}"
+              hx-swap="outerHTML">
+        Retry Post Generation
+      </button>
+      <button type="button" class="btn btn-danger-ghost"
+              hx-delete="/posts/{{hex .ID}}"
+              hx-target="#post-{{hex .ID}}"
+              hx-swap="outerHTML">
+        Delete
+      </button>
+    </div>
+    {{end}}
+  </div>
+
+  {{if ne .Status "generating"}}
+  <div class="card-drawers">
+    {{if .AlternativeHooks}}
+    <details class="drawer">
+      <summary>2 Alternative Hooks (Swap or Copy)</summary>
+      <div class="drawer-content">
+        {{range $idx, $hook := .AlternativeHooks}}
+        <div class="alt-hook-box">{{$hook}}
+          <div style="margin-top:0.4rem;">
+            <button type="button" class="btn btn-sm"
+                    onclick="copyRawText(this, {{printf "%q" $hook}}, 'Alternative hook')">
+              Copy Hook {{add1 $idx}}
+            </button>
+          </div>
+        </div>
+        {{end}}
+      </div>
+    </details>
+    {{end}}
+
+    <details class="drawer">
+      <summary>{{if imageGenEnabled}}Regenerate Copy or Image (Steered){{else}}Regenerate Copy (Steered){{end}}</summary>
+      <div class="drawer-content">
+        <form hx-post="/posts/{{hex .ID}}/regenerate-text"
+              hx-target="#post-{{hex .ID}}"
+              hx-swap="outerHTML"
+              style="margin-bottom:0.75rem;">
+          <label class="field-label">Steer Text Regeneration{{if searchGroundingEnabled}} (searches fresh web blogs){{end}}</label>
+          <div style="display:flex; gap:0.4rem;">
+            <input type="text" name="steering" placeholder="e.g. Make hook more contrarian, shorter bullets">
+            <button type="submit" class="btn btn-sm" style="flex-shrink:0;">Regen Text</button>
+          </div>
+        </form>
+
+        {{if imageGenEnabled}}
+        <form hx-post="/posts/{{hex .ID}}/regenerate-image"
+              hx-target="#post-{{hex .ID}}"
+              hx-swap="outerHTML">
+          <label class="field-label">Steer Image Regeneration</label>
+          <div style="display:flex; gap:0.4rem; margin-bottom:0.4rem;">
+            <select name="aspect_ratio" style="width:110px; flex-shrink:0;">
+              <option value="4:5" {{if eq .ImageAspectRatio "4:5"}}selected{{end}}>4:5 Feed</option>
+              <option value="1:1" {{if eq .ImageAspectRatio "1:1"}}selected{{end}}>1:1 Square</option>
+            </select>
+            <input type="text" name="steering" placeholder="e.g. Minimalist whiteboard sketch style">
+            <button type="submit" class="btn btn-sm" style="flex-shrink:0;">Regen Image</button>
+          </div>
+        </form>
+
+        {{if .AlternativeVisuals}}
+        <div style="margin-top:0.5rem;">
+          <div class="field-label">Or try an alternative visual angle:</div>
+          {{range $idx, $vis := .AlternativeVisuals}}
+          <form hx-post="/posts/{{hex $.ID}}/regenerate-image"
+                hx-target="#post-{{hex $.ID}}"
+                hx-swap="outerHTML"
+                style="margin-bottom:0.35rem;">
+            <input type="hidden" name="aspect_ratio" value="{{$.ImageAspectRatio}}">
+            <input type="hidden" name="steering" value="{{$vis}}">
+            <button type="submit" class="btn btn-sm" style="text-align:left; width:100%; justify-content:flex-start; white-space:normal;">
+              ↻ Concept {{add1 $idx}}: {{$vis}}
+            </button>
+          </form>
+          {{end}}
+        </div>
+        {{end}}
+        {{else}}
+        <div class="drawer-disabled-note">
+          <strong>Image Generation Disabled:</strong> Not having an image on this post is not an error. Enable <code>GEMINI_IMAGE_GENERATION=true</code> with a Paid Tier key in <a href="/settings">Settings</a> to generate custom illustrations.
+        </div>
+        {{end}}
+      </div>
+    </details>
+
+    {{if .StrategyAngle}}
+    <details class="drawer">
+      <summary>Strategy Snapshot &amp; Alt Text</summary>
+      <div class="drawer-content" style="color:var(--text-muted);">
+        <p style="margin:0 0 0.3rem;"><strong>Area:</strong> {{.StrategyArea}}</p>
+        <p style="margin:0 0 0.3rem;"><strong>Hook:</strong> {{.StrategyHook}}</p>
+        <p style="margin:0 0 0.3rem;"><strong>Angle:</strong> {{.StrategyAngle}}</p>
+        <p style="margin:0 0 0.45rem;"><strong>Discussion:</strong> {{.StrategyDiscussion}}</p>
+        {{if .AltText}}
+        <p style="margin:0;"><strong>Alt Text:</strong> {{.AltText}}</p>
+        {{end}}
+      </div>
+    </details>
+    {{end}}
+  </div>
+  {{end}}
+</article>
+{{end}}
+
+{{define "fold_render"}}
+  {{$f := fold .}}
+  <pre class="post-copy-text">{{$f.Before}}</pre>
+  {{if $f.HasFold}}
+  <div class="fold-divider">LinkedIn "...more" fold</div>
+  <pre class="post-copy-text">{{$f.After}}</pre>
+  {{end}}
+{{end}}
+
+{{define "post_edit"}}
+<article id="post-{{hex .ID}}" class="post-card">
+  <div class="post-card-header">
+    <strong>Editing Slot {{.SlotIndex}} ({{.SubjectName}})</strong>
+  </div>
+  <form class="post-body"
+        hx-post="/posts/{{hex .ID}}/content"
+        hx-target="#post-{{hex .ID}}"
+        hx-swap="outerHTML">
+    <div style="margin-bottom:0.75rem;">
+      <label class="field-label">LinkedIn Post Text (Plain text)</label>
+      <textarea name="content" rows="14" required>{{.Content}}</textarea>
+    </div>
+    <div style="margin-bottom:0.75rem;">
+      <label class="field-label">Suggested Day</label>
+      <input type="text" name="suggested_day" value="{{.SuggestedDay}}">
+    </div>
+    <div style="margin-bottom:0.75rem;">
+      <label class="field-label">Image Alt Text</label>
+      <textarea name="alt_text" rows="2">{{.AltText}}</textarea>
+    </div>
+    <div style="display:flex; gap:0.5rem;">
+      <button type="submit" class="btn btn-primary">Save Changes</button>
+      <button type="button" class="btn"
+              hx-get="/posts/{{hex .ID}}/card"
+              hx-target="#post-{{hex .ID}}"
+              hx-swap="outerHTML">
+        Cancel
+      </button>
+    </div>
+  </form>
+</article>
+{{end}}

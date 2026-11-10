@@ -1,0 +1,159 @@
+{{define "page_settings"}}
+{{template "head"}}
+{{template "nav" "settings"}}
+<main class="container-narrow">
+  <div class="toolbar">
+    <div>
+      <h1 class="toolbar-title">Prompts, Models &amp; Notifications</h1>
+      <p style="margin:0.25rem 0 0; color:var(--text-muted); font-size:0.9rem;">
+        Seeded directly from your <code>linkedin-post</code> and <code>linkedin-post-image</code> skills. Edit anytime without rebuilding Docker.
+      </p>
+    </div>
+  </div>
+
+  {{if .SavedMessage}}
+  <div class="banner banner-success">{{.SavedMessage}}</div>
+  {{end}}
+  {{if .ErrorMessage}}
+  <div class="banner banner-danger">{{.ErrorMessage}}</div>
+  {{end}}
+
+  <section class="panel">
+    <h2 style="margin:0 0 0.75rem; font-size:1rem;">Runtime Environment &amp; Gemini Model Recommendations</h2>
+    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:0.75rem; margin-bottom:1rem; font-size:0.85rem;">
+      <div style="padding:0.65rem; background:var(--surface-subtle); border-radius:8px; border:1px solid var(--border);">
+        <div style="color:var(--text-faint);">API Key Status</div>
+        <strong>{{if .GeminiConfigured}}✓ Configured{{else}}✕ Missing GEMINI_API_KEY{{end}}</strong>
+      </div>
+      <div style="padding:0.65rem; background:var(--surface-subtle); border-radius:8px; border:1px solid var(--border);">
+        <div style="color:var(--text-faint);">Active Text Model</div>
+        <code>{{.TextModel}}</code>
+        <div style="font-size:0.75rem; color:var(--text-faint); margin-top:0.25rem;">
+          Grounding: {{if .SearchGrounding}}<span style="color:#10b981;">Enabled (Paid Tier)</span>{{else}}<span style="color:#f59e0b;">Disabled (Free Tier mode)</span>{{end}}
+        </div>
+      </div>
+      <div style="padding:0.65rem; background:var(--surface-subtle); border-radius:8px; border:1px solid var(--border);">
+        <div style="color:var(--text-faint);">Active Image Model</div>
+        <code>{{.ImageModel}}</code>
+        <div style="font-size:0.75rem; color:var(--text-faint); margin-top:0.25rem;">
+          Images: {{if .ImageGeneration}}<span style="color:#10b981;">Enabled (Paid Tier)</span>{{else if .ImageAutoDisabled}}<span style="color:#f59e0b;">Auto-Disabled (Free Tier 0 RPD)</span>{{else}}<span style="color:#f59e0b;">Disabled (Text-Only Mode)</span>{{end}}
+        </div>
+      </div>
+      <div style="padding:0.65rem; background:var(--surface-subtle); border-radius:8px; border:1px solid var(--border);">
+        <div style="color:var(--text-faint);">Sunday Schedule ({{.Timezone}})</div>
+        <code>{{.SundayCron}}</code> ({{.PostsPerWeek}} posts/wk)
+      </div>
+    </div>
+    {{if not .ImageGeneration}}
+    <div class="banner banner-info" style="margin-bottom:0.85rem; font-size:0.84rem;">
+      <div>{{.ImageDisabledReason}}</div>
+    </div>
+    {{end}}
+
+    <details class="drawer" style="border:1px solid var(--border); border-radius:8px;">
+      <summary>Recommended Model Combinations for <code>.env</code></summary>
+      <div class="drawer-content">
+        <table class="data-table" style="font-size:0.82rem;">
+          <thead>
+            <tr>
+              <th>Role (<code>.env</code> variable)</th>
+              <th>Model ID</th>
+              <th>Trade-off &amp; Best Use Case</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>GEMINI_TEXT_MODEL</code></td>
+              <td><code>gemini-3.8-flash</code> <em>(Default)</em></td>
+              <td>Best price/speed/quality balance — fast Google Search grounding + strong adherence to anti-cliché writing rules.</td>
+            </tr>
+            <tr>
+              <td><code>GEMINI_TEXT_MODEL</code></td>
+              <td><code>gemini-4-argon</code></td>
+              <td>Flagship deep reasoning &amp; sharpest technical nuance when unpacking complex engineering blog posts.</td>
+            </tr>
+            <tr>
+              <td><code>GEMINI_TEXT_MODEL</code></td>
+              <td><code>gemini-3.5-flash-lite</code></td>
+              <td>Lowest cost &amp; ultra-fast drafts.</td>
+            </tr>
+            <tr>
+              <td><code>GEMINI_IMAGE_MODEL</code></td>
+              <td><code>gemini-nano-banana-2.1</code> <em>(Default)</em></td>
+              <td>Nano Banana 2.1 — fast, crisp editorial illustrations &amp; native <code>4:5</code> / <code>1:1</code> aspect ratio control.</td>
+            </tr>
+            <tr>
+              <td><code>GEMINI_IMAGE_MODEL</code></td>
+              <td><code>gemini-3-pro-image</code></td>
+              <td>Nano Banana Pro — studio-grade composition and fine editorial linework for flagship visuals.</td>
+            </tr>
+            <tr>
+              <td><code>GEMINI_IMAGE_MODEL</code></td>
+              <td><code>gemini-3.1-flash-lite-image</code></td>
+              <td>Ultra-low-cost rapid visual iteration.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </details>
+  </section>
+
+  <form method="POST" action="/settings" class="panel">
+    <h2 style="margin:0 0 0.85rem; font-size:1rem;">Workflow &amp; Voice Preferences</h2>
+
+    <div style="margin-bottom:0.85rem;">
+      <label class="field-label">Author Persona &amp; Voice Context</label>
+      <textarea name="author_persona" rows="2">{{.Settings.AuthorPersona}}</textarea>
+    </div>
+
+    <div style="display:grid; grid-template-columns: 2fr 1fr; gap:0.75rem; margin-bottom:0.85rem;">
+      <div>
+        <label class="field-label">Suggested Posting Days (comma-separated, assigned to weekly slots)</label>
+        <input type="text" name="preferred_days" value="{{joinComma .Settings.PreferredDays}}" placeholder="Tuesday, Wednesday, Thursday">
+      </div>
+      <div>
+        <label class="field-label">Default Image Aspect Ratio</label>
+        <select name="default_aspect_ratio">
+          <option value="4:5" {{if eq .Settings.DefaultAspectRatio "4:5"}}selected{{end}}>4:5 Portrait (Best Mobile Feed)</option>
+          <option value="1:1" {{if eq .Settings.DefaultAspectRatio "1:1"}}selected{{end}}>1:1 Square</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="margin-bottom:1.25rem;">
+      <label class="field-label">Ready Notification Webhook URL (Optional — Discord, Slack, or Generic JSON)</label>
+      <div style="display:flex; gap:0.5rem;">
+        <input type="url" name="webhook_url" value="{{.Settings.WebhookURL}}" placeholder="https://discord.com/api/webhooks/... or https://hooks.slack.com/...">
+      </div>
+    </div>
+
+    <hr style="border:none; border-top:1px solid var(--border); margin:1.25rem 0;">
+
+    <div style="margin-bottom:1rem;">
+      <label class="field-label"><code>linkedin-post</code> Skill System Prompt</label>
+      <textarea name="post_skill_prompt" rows="14" style="font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:0.82rem;">{{.Settings.PostSkillPrompt}}</textarea>
+    </div>
+
+    <div style="margin-bottom:1rem;">
+      <label class="field-label"><code>linkedin-post-image</code> Skill System Prompt</label>
+      <textarea name="image_skill_prompt" rows="12" style="font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:0.82rem;">{{.Settings.ImageSkillPrompt}}</textarea>
+    </div>
+
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.75rem;">
+      <button type="submit" class="btn btn-primary">Save All Settings</button>
+    </div>
+  </form>
+
+  <div class="panel" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.75rem;">
+    <form method="POST" action="/settings/test-webhook" style="margin:0;">
+      <button type="submit" class="btn">Send Test Webhook Notification</button>
+    </form>
+
+    <form method="POST" action="/settings/reset-prompts" style="margin:0;"
+          onsubmit="return confirm('Reset both skill prompts back to the built-in SKILL.md defaults?');">
+      <button type="submit" class="btn btn-danger-ghost">Reset Prompts to Default Skills</button>
+    </form>
+  </div>
+</main>
+{{template "foot"}}
+{{end}}

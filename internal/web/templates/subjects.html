@@ -1,0 +1,148 @@
+{{define "page_subjects"}}
+{{template "head"}}
+{{template "nav" "subjects"}}
+<main class="container-narrow">
+  <div class="toolbar">
+    <div>
+      <h1 class="toolbar-title">Subjects &amp; Priority Weights</h1>
+      <p style="margin:0.25rem 0 0; color:var(--text-muted); font-size:0.9rem;">
+        Assign each subject a priority from <strong>1 to 10</strong>. Higher-priority subjects are selected proportionally more often via Smooth Weighted Round-Robin (e.g., <code>.NET = 10</code>, <code>Angular = 10</code>, <code>Golang = 4</code> → 42% / 42% / 17%).
+      </p>
+    </div>
+  </div>
+
+  <section class="panel">
+    <h2 style="margin:0 0 0.85rem; font-size:1rem;">Add a Subject</h2>
+    <form hx-post="/subjects" hx-target="#subjects-table-wrap" hx-swap="innerHTML" hx-on::after-request="if(event.detail.successful) this.reset()">
+      <div style="display:grid; grid-template-columns: 2fr 120px; gap:0.75rem; margin-bottom:0.75rem;">
+        <div>
+          <label class="field-label">Subject / Area Name</label>
+          <input type="text" name="name" placeholder="e.g. .NET, Angular, Golang, Distributed Systems" required>
+        </div>
+        <div>
+          <label class="field-label">Priority (1–10)</label>
+          <input type="number" name="priority" min="1" max="10" value="8" required>
+        </div>
+      </div>
+      <div style="margin-bottom:0.75rem;">
+        <label class="field-label">Focus Guidelines / Sub-topics (optional — guides Google Search &amp; post angle)</label>
+        <input type="text" name="description" placeholder="e.g. C# performance, Minimal APIs, EF Core pitfalls, .NET release updates">
+      </div>
+      <button type="submit" class="btn btn-primary">+ Add Subject</button>
+    </form>
+  </section>
+
+  <section class="panel" style="padding:0; overflow:hidden;">
+    <div id="subjects-table-wrap">
+      {{template "subjects_table" .}}
+    </div>
+  </section>
+</main>
+{{template "foot"}}
+{{end}}
+
+{{define "subjects_table"}}
+{{if .Subjects}}
+<div class="table-wrap">
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Subject</th>
+        <th>Priority &amp; Share</th>
+        <th>Posts Generated</th>
+        <th>Last Used</th>
+        <th>Status</th>
+        <th style="text-align:right;">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{range .Subjects}}
+        {{template "subject_row" (subjectRowCtx . $.TotalActivePriority)}}
+      {{end}}
+    </tbody>
+  </table>
+</div>
+{{else}}
+<div class="empty-state" style="border:none;">
+  <p style="margin:0;">No subjects configured yet. Add your topics above (for example <code>.NET</code> at priority 10, <code>Angular</code> at 10, and <code>Golang</code> at 4).</p>
+</div>
+{{end}}
+{{end}}
+
+{{define "subject_row"}}
+<tr id="subject-{{hex .Subject.ID}}">
+  <td>
+    <div style="font-weight:700;">{{.Subject.Name}}</div>
+    {{if .Subject.Description}}
+    <div style="font-size:0.8rem; color:var(--text-muted);">{{.Subject.Description}}</div>
+    {{end}}
+  </td>
+  <td>
+    <div class="priority-bar-track">
+      <div class="priority-bar-fill" style="width:{{barPct .Subject.Priority}}%; {{if not .Subject.Active}}background:#94a3b8;{{end}}"></div>
+    </div>
+    <strong>{{.Subject.Priority}}/10</strong>
+    {{if .Subject.Active}}
+    <span class="pill pill-blue" style="margin-left:0.25rem;">{{pct .Subject.Priority .TotalActivePriority}}</span>
+    {{end}}
+  </td>
+  <td>{{.Subject.UsageCount}}</td>
+  <td style="font-size:0.82rem; color:var(--text-muted);">{{formatTime .Subject.LastUsedAt}}</td>
+  <td>
+    <button type="button"
+            class="btn btn-sm {{if .Subject.Active}}pill-green{{else}}pill-gray{{end}}"
+            hx-post="/subjects/{{hex .Subject.ID}}/toggle"
+            hx-target="#subjects-table-wrap"
+            hx-swap="innerHTML">
+      {{if .Subject.Active}}Active{{else}}Paused{{end}}
+    </button>
+  </td>
+  <td style="text-align:right; white-space:nowrap;">
+    <button type="button" class="btn btn-sm"
+            hx-get="/subjects/{{hex .Subject.ID}}/edit"
+            hx-target="#subject-{{hex .Subject.ID}}"
+            hx-swap="outerHTML">
+      Edit
+    </button>
+    <button type="button" class="btn btn-danger-ghost btn-sm"
+            hx-delete="/subjects/{{hex .Subject.ID}}"
+            hx-confirm="Delete subject '{{.Subject.Name}}'?"
+            hx-target="#subjects-table-wrap"
+            hx-swap="innerHTML">
+      Delete
+    </button>
+  </td>
+</tr>
+{{end}}
+
+{{define "subject_edit_row"}}
+<tr id="subject-{{hex .ID}}" style="background:var(--linkedin-soft);">
+  <td colspan="6">
+    <form hx-post="/subjects/{{hex .ID}}"
+          hx-target="#subjects-table-wrap"
+          hx-swap="innerHTML"
+          style="display:flex; flex-wrap:wrap; gap:0.6rem; align-items:flex-end;">
+      <div style="flex:2 1 180px;">
+        <label class="field-label">Subject Name</label>
+        <input type="text" name="name" value="{{.Name}}" required>
+      </div>
+      <div style="width:110px;">
+        <label class="field-label">Priority (1–10)</label>
+        <input type="number" name="priority" min="1" max="10" value="{{.Priority}}" required>
+      </div>
+      <div style="flex:3 1 240px;">
+        <label class="field-label">Guidelines</label>
+        <input type="text" name="description" value="{{.Description}}">
+      </div>
+      <input type="hidden" name="active" value="{{if .Active}}true{{else}}false{{end}}">
+      <button type="submit" class="btn btn-primary btn-sm" style="height:36px;">Save</button>
+      <button type="button" class="btn btn-sm" style="height:36px;"
+              hx-get="/subjects/table"
+              hx-target="#subjects-table-wrap"
+              hx-swap="innerHTML">
+        Cancel
+      </button>
+    </form>
+  </td>
+</tr>
+{{end}}
